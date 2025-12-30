@@ -278,7 +278,7 @@ function createDial(index) {
         canvas.width = 128;
         canvas.height = 128;
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#2c1810';
+        ctx.fillStyle = '#f4e4c1';
         ctx.font = 'bold 60px Georgia';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
