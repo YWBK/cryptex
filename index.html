@@ -56,9 +56,24 @@
         </div>
         <div class="status-group">
             <span class="status-label">In Control:</span>
-            <input id="active-voice-input" type="text" class="active-voice-input"
-                placeholder="type voice name…" maxlength="50" autocomplete="off">
+            <select id="active-voice-select" class="active-voice-select">
+                <option value="">— no one —</option>
+            </select>
         </div>
+    </div>
+
+    <!-- ── GM Voice Manager (GM only) ── -->
+    <div id="gm-voice-manager" class="hidden">
+        <div class="gm-vm-header">
+            <span class="gm-vm-title">🎭 Players</span>
+            <span class="gm-vm-hint">Add all player names before the game starts</span>
+        </div>
+        <div class="gm-vm-add-row">
+            <input type="text" id="gm-vm-input" class="gm-vm-input"
+                placeholder="Enter player name…" maxlength="50" autocomplete="off">
+            <button id="btn-gm-add-voice" class="btn btn-primary gm-vm-add-btn">Add</button>
+        </div>
+        <div id="gm-vm-list" class="gm-vm-list"></div>
     </div>
 
     <!-- ── GM Controls (GM only) ── -->

@@ -10,7 +10,8 @@ let state = {
         mode: null,           // null | 'player' | 'gm'
         johnState: 'awake',   // 'awake' | 'asleep'
         activeVoiceId: null,
-        activeVoiceName: ''   // GM mode: free-text name of whoever's in control
+        activeVoiceName: '',  // GM mode: name of whoever's in control
+        gmVoiceNames: []      // GM mode: list of player names entered at session start
     }
 };
 
@@ -189,6 +190,7 @@ function renderMode() {
     // GM-only sections
     const isGM = mode === 'gm';
     document.getElementById('john-status-bar').classList.toggle('hidden', !isGM);
+    document.getElementById('gm-voice-manager').classList.toggle('hidden', !isGM);
     document.getElementById('gm-controls').classList.toggle('hidden', !isGM);
 
     // Player-only sections
@@ -212,12 +214,55 @@ function renderJohnStatus() {
 
 function renderGMMode() {
     renderJohnStatus();
+    renderGMVoiceSelect();
+    renderGMVoiceList();
+}
 
-    // Keep the active voice input in sync without clobbering mid-type
-    const input = document.getElementById('active-voice-input');
-    if (input && document.activeElement !== input) {
-        input.value = state.session.activeVoiceName || '';
+function renderGMVoiceSelect() {
+    const select = document.getElementById('active-voice-select');
+    if (!select) return;
+    const current = state.session.activeVoiceName || '';
+    select.innerHTML = '<option value="">— no one —</option>' +
+        state.session.gmVoiceNames.map(name =>
+            `<option value="${escapeHtml(name)}"${name === current ? ' selected' : ''}>${escapeHtml(name)}</option>`
+        ).join('');
+}
+
+function renderGMVoiceList() {
+    const list = document.getElementById('gm-vm-list');
+    if (!list) return;
+    if (state.session.gmVoiceNames.length === 0) {
+        list.innerHTML = '<p class="gm-vm-empty">No players added yet.</p>';
+        return;
     }
+    list.innerHTML = state.session.gmVoiceNames.map(name => `
+        <div class="gm-vm-item">
+            <span class="gm-vm-name">${escapeHtml(name)}</span>
+            <button class="gm-vm-remove" data-name="${escapeHtml(name)}" aria-label="Remove ${escapeHtml(name)}">✕</button>
+        </div>
+    `).join('');
+}
+
+// ── GM Voice Name Management ──────────────────────────────────────────────
+function addGMVoiceName(name) {
+    name = name.trim();
+    if (!name) return;
+    if (state.session.gmVoiceNames.some(n => n.toLowerCase() === name.toLowerCase())) {
+        showToast('That name is already in the list.');
+        return;
+    }
+    state.session.gmVoiceNames.push(name);
+    saveState();
+    renderGMMode();
+}
+
+function removeGMVoiceName(name) {
+    state.session.gmVoiceNames = state.session.gmVoiceNames.filter(n => n !== name);
+    if (state.session.activeVoiceName === name) {
+        state.session.activeVoiceName = '';
+    }
+    saveState();
+    renderGMMode();
 }
 
 function renderPlayerMode() {
@@ -733,10 +778,29 @@ function bindEvents() {
     document.getElementById('btn-john-awake').addEventListener('click',  () => setJohnState('awake'));
     document.getElementById('btn-john-asleep').addEventListener('click', () => setJohnState('asleep'));
 
-    // Active voice text input (GM)
-    document.getElementById('active-voice-input').addEventListener('input', e => {
+    // Active voice dropdown (GM)
+    document.getElementById('active-voice-select').addEventListener('change', e => {
         state.session.activeVoiceName = e.target.value;
         saveState();
+    });
+
+    // GM voice manager
+    const gmVmInput = document.getElementById('gm-vm-input');
+    document.getElementById('btn-gm-add-voice').addEventListener('click', () => {
+        addGMVoiceName(gmVmInput.value);
+        gmVmInput.value = '';
+        gmVmInput.focus();
+    });
+    gmVmInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            addGMVoiceName(gmVmInput.value);
+            gmVmInput.value = '';
+            gmVmInput.focus();
+        }
+    });
+    document.getElementById('gm-vm-list').addEventListener('click', e => {
+        const btn = e.target.closest('.gm-vm-remove');
+        if (btn) removeGMVoiceName(btn.dataset.name);
     });
 
     // GM controls
