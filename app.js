@@ -247,7 +247,7 @@ function renderGMVoiceList() {
 function addGMVoiceName(name) {
     name = name.trim();
     if (!name) return;
-    if (state.session.gmVoiceNames.includes(name)) {
+    if (state.session.gmVoiceNames.some(n => n.toLowerCase() === name.toLowerCase())) {
         showToast('That name is already in the list.');
         return;
     }
@@ -795,6 +795,7 @@ function bindEvents() {
         if (e.key === 'Enter') {
             addGMVoiceName(gmVmInput.value);
             gmVmInput.value = '';
+            gmVmInput.focus();
         }
     });
     document.getElementById('gm-vm-list').addEventListener('click', e => {
