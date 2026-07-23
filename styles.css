@@ -768,7 +768,244 @@ body {
 /* ── Utility ─────────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
 
-/* ── Responsive ──────────────────────────────────────────────────────────── */
+/* ── Mode Select Overlay ─────────────────────────────────────────────────── */
+.mode-select-box {
+    max-width: 400px;
+    padding: 28px 24px;
+    text-align: center;
+}
+
+.mode-select-header {
+    margin-bottom: 18px;
+}
+
+.mode-select-icon {
+    font-size: 3rem;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.mode-select-header h2 {
+    font-size: 1.6rem;
+    color: var(--primary);
+    margin-bottom: 2px;
+}
+
+.mode-select-sub {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+.mode-select-intro {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+
+.mode-select-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.mode-option-btn {
+    background: var(--card-bg);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: border-color 0.18s, box-shadow 0.18s;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mode-option-btn:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(91, 45, 142, 0.12);
+}
+
+.mode-option-btn:active { transform: scale(0.98); }
+
+.mode-option-icon {
+    font-size: 1.5rem;
+    margin-bottom: 2px;
+}
+
+.mode-option-btn strong {
+    font-size: 1rem;
+    color: var(--primary);
+}
+
+.mode-option-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
+/* ── GM Controls Bar ─────────────────────────────────────────────────────── */
+#gm-controls {
+    padding: 12px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    background: var(--bg-dark);
+    border-bottom: 1px solid var(--border);
+}
+
+/* ── Active Voice Input (GM) ─────────────────────────────────────────────── */
+.active-voice-input {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: var(--radius-sm);
+    color: var(--gold-lt);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: bold;
+    padding: 4px 10px;
+    width: 160px;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.active-voice-input::placeholder { color: rgba(255,255,255,0.45); font-weight: normal; }
+
+.active-voice-input:focus {
+    outline: none;
+    background: rgba(255,255,255,0.26);
+    border-color: rgba(255,255,255,0.7);
+}
+
+/* ── Player Panel ────────────────────────────────────────────────────────── */
+#player-panel {
+    padding: 20px;
+    max-width: 540px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Player setup prompt */
+.player-setup {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text-muted);
+}
+
+.player-setup .empty-icon { font-size: 3.5rem; margin-bottom: 14px; }
+.player-setup h2  { font-size: 1.4rem; color: var(--text); margin-bottom: 8px; }
+.player-setup p   { margin-bottom: 20px; line-height: 1.6; }
+
+/* Player card variant */
+.player-card {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(91, 45, 142, 0.12), 0 4px 14px var(--shadow);
+}
+
+.player-badge {
+    background: var(--primary);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ── Bid Widget ──────────────────────────────────────────────────────────── */
+.bid-widget {
+    background: var(--card-bg);
+    border: 2px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: 0 4px 12px var(--shadow);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.bid-widget-header {
+    text-align: center;
+}
+
+.bid-widget-header h3 {
+    font-size: 1.1rem;
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+
+.bid-widget-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.bid-widget-body {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.bid-btn {
+    width: 42px;
+    height: 42px;
+    font-size: 1.4rem;
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.bid-btn:hover:not(:disabled) {
+    background: var(--accent);
+    color: #fff;
+}
+
+.bid-amount-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 70px;
+}
+
+.bid-amount {
+    font-size: 3rem;
+    font-weight: bold;
+    color: var(--accent);
+    line-height: 1;
+}
+
+.bid-wp-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: bold;
+    margin-top: 2px;
+}
+
+.bid-clear-btn {
+    font-size: 0.82rem;
+    padding: 6px 16px;
+}
+
+/* ── GM End Note ─────────────────────────────────────────────────────────── */
+.gm-end-note {
+    padding: 12px 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.gm-end-note p {
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--text);
+}
+
+/* ── Responsive additions ────────────────────────────────────────────────── */
 @media (max-width: 600px) {
     .app-header h1 { font-size: 1.2rem; }
 
@@ -789,5 +1026,11 @@ body {
     .modal-box { max-height: 95vh; }
 
     .wp-value { font-size: 1.7rem; }
+
+    #player-panel { padding: 12px; gap: 12px; }
+    .mode-select-box { padding: 20px 16px; }
+    .bid-amount { font-size: 2.4rem; }
+    .active-voice-input { width: 120px; }
 }
+
 
