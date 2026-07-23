@@ -37,7 +37,7 @@ function saveState() {
 
 // ── Utilities ─────────────────────────────────────────────────────────────
 function genId() {
-    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+    return crypto.randomUUID();
 }
 
 function escapeHtml(str) {
@@ -106,8 +106,8 @@ function adjustWillpower(id, delta) {
     renderVoices();
     renderJohnStatus();
 
-    // Check all-zero condition
-    if (delta < 0 && state.voices.length > 0 && state.voices.every(v => v.willpower === 0)) {
+    // Check all-zero condition (only worth iterating if this voice just hit 0)
+    if (delta < 0 && v.willpower === 0 && state.voices.every(v => v.willpower === 0)) {
         showToast('💀 All Voices at 0 Willpower — session is over!', 4000);
         setTimeout(openEndSessionModal, 2200);
     }
