@@ -855,8 +855,8 @@ body {
     border-bottom: 1px solid var(--border);
 }
 
-/* ── Active Voice Input (GM) ─────────────────────────────────────────────── */
-.active-voice-input {
+/* ── Active Voice Select (GM) ────────────────────────────────────────────── */
+.active-voice-select {
     background: rgba(255,255,255,0.18);
     border: 1px solid rgba(255,255,255,0.4);
     border-radius: var(--radius-sm);
@@ -865,16 +865,124 @@ body {
     font-size: 0.95rem;
     font-weight: bold;
     padding: 4px 10px;
-    width: 160px;
+    min-width: 160px;
+    cursor: pointer;
     transition: border-color 0.15s, background 0.15s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23f4d56a' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
 }
 
-.active-voice-input::placeholder { color: rgba(255,255,255,0.45); font-weight: normal; }
+.active-voice-select option {
+    background: #3d1a6b;
+    color: #fff;
+    font-weight: normal;
+}
 
-.active-voice-input:focus {
+.active-voice-select:focus {
     outline: none;
-    background: rgba(255,255,255,0.26);
+    background-color: rgba(255,255,255,0.26);
     border-color: rgba(255,255,255,0.7);
+}
+
+/* ── GM Voice Manager ────────────────────────────────────────────────────── */
+#gm-voice-manager {
+    background: var(--bg-dark);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px 12px;
+}
+
+.gm-vm-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.gm-vm-title {
+    font-size: 0.88rem;
+    font-weight: bold;
+    color: var(--primary);
+}
+
+.gm-vm-hint {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.gm-vm-add-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.gm-vm-input {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 0.9rem;
+    color: var(--text);
+    background: #fff;
+    transition: border-color 0.15s;
+}
+
+.gm-vm-input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.gm-vm-add-btn {
+    padding: 7px 14px;
+    white-space: nowrap;
+}
+
+.gm-vm-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.gm-vm-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 6px 3px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+.gm-vm-name {
+    font-weight: bold;
+}
+
+.gm-vm-remove {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 2px 4px;
+    border-radius: 50%;
+    line-height: 1;
+    transition: color 0.15s, background 0.15s;
+}
+
+.gm-vm-remove:hover {
+    color: var(--danger);
+    background: #fee2e2;
+}
+
+.gm-vm-empty {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    font-style: italic;
 }
 
 /* ── Player Panel ────────────────────────────────────────────────────────── */
@@ -1030,7 +1138,7 @@ body {
     #player-panel { padding: 12px; gap: 12px; }
     .mode-select-box { padding: 20px 16px; }
     .bid-amount { font-size: 2.4rem; }
-    .active-voice-input { width: 120px; }
+    .active-voice-select { min-width: 120px; }
 }
 
 
