@@ -118,7 +118,10 @@ function adjustWillpower(id, delta) {
     if (state.session.mode === 'player') renderPlayerMode();
 
     if (delta < 0 && v.willpower === 0 && state.voices.every(v => v.willpower === 0)) {
-        showToast('💀 All Voices at 0 Willpower — session is over!', 4000);
+        showToast('💀 Willpower hit 0 — session is over!', 4000);
+        if (state.session.mode === 'player') {
+            setTimeout(openEndSessionModal, 2200);
+        }
     }
 }
 
@@ -445,7 +448,13 @@ function buildVoiceCard(voice) {
 
 // ── Voice Modal ───────────────────────────────────────────────────────────
 function openAddVoiceModal() {
-    document.getElementById('voice-modal-title').textContent = 'Add Voice';
+    // In player mode, each device tracks a single character
+    if (state.session.mode === 'player' && state.voices.length > 0) {
+        showToast('You already have a character — edit it instead!');
+        return;
+    }
+    document.getElementById('voice-modal-title').textContent =
+        state.session.mode === 'player' ? 'Create Your Character' : 'Add Voice';
     document.getElementById('edit-voice-id').value = '';
     document.getElementById('voice-form').reset();
     document.getElementById('skill-3-row').classList.add('hidden');
