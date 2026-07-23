@@ -7,8 +7,10 @@ const STORAGE_KEY = 'everyone-is-john-v1';
 let state = {
     voices: [],
     session: {
+        mode: null,           // null | 'player' | 'gm'
         johnState: 'awake',   // 'awake' | 'asleep'
-        activeVoiceId: null
+        activeVoiceId: null,
+        activeVoiceName: ''   // GM mode: free-text name of whoever's in control
     }
 };
 
@@ -18,7 +20,6 @@ function loadState() {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            // Shallow merge so future schema additions survive
             if (parsed.voices)  state.voices  = parsed.voices;
             if (parsed.session) state.session = { ...state.session, ...parsed.session };
         }
@@ -60,6 +61,13 @@ function showToast(msg, ms = 2800) {
 function openModal(id)  { document.getElementById(id).classList.remove('hidden'); }
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
+// ── Mode ──────────────────────────────────────────────────────────────────
+function setMode(mode) {
+    state.session.mode = mode;
+    saveState();
+    render();
+}
+
 // ── Voice Operations ──────────────────────────────────────────────────────
 function addVoice(data) {
     const startWP = parseInt(data.startWillpower, 10);
@@ -76,6 +84,7 @@ function addVoice(data) {
     });
     saveState();
     renderVoices();
+    if (state.session.mode === 'player') renderPlayerMode();
 }
 
 function updateVoice(id, data) {
@@ -88,6 +97,7 @@ function updateVoice(id, data) {
     v.obsessionText  = data.obsessionText;
     saveState();
     renderVoices();
+    if (state.session.mode === 'player') renderPlayerMode();
 }
 
 function deleteVoice(id) {
@@ -105,11 +115,10 @@ function adjustWillpower(id, delta) {
     saveState();
     renderVoices();
     renderJohnStatus();
+    if (state.session.mode === 'player') renderPlayerMode();
 
-    // Check all-zero condition (only worth iterating if this voice just hit 0)
     if (delta < 0 && v.willpower === 0 && state.voices.every(v => v.willpower === 0)) {
         showToast('💀 All Voices at 0 Willpower — session is over!', 4000);
-        setTimeout(openEndSessionModal, 2200);
     }
 }
 
@@ -119,6 +128,7 @@ function adjustCompletions(id, delta) {
     v.completions = Math.max(0, v.completions + delta);
     saveState();
     renderVoices();
+    if (state.session.mode === 'player') renderPlayerMode();
 }
 
 function toggleObsessionReveal(id) {
@@ -127,6 +137,7 @@ function toggleObsessionReveal(id) {
     v.obsessionRevealed = !v.obsessionRevealed;
     saveState();
     renderVoices();
+    if (state.session.mode === 'player') renderPlayerMode();
 }
 
 function setActiveVoice(id) {
@@ -159,23 +170,193 @@ function johnSleeps() {
 
 // ── Rendering ─────────────────────────────────────────────────────────────
 function render() {
-    renderJohnStatus();
-    renderVoices();
+    renderMode();
+}
+
+function renderMode() {
+    const mode = state.session.mode;
+
+    // Mode select overlay
+    document.getElementById('mode-select-overlay').classList.toggle('hidden', mode !== null);
+
+    // Header mode label
+    const modeLabel = document.getElementById('header-mode-label');
+    modeLabel.textContent = mode === 'player' ? 'Player' : mode === 'gm' ? 'Game Master' : 'Voice Tracker';
+
+    // GM-only sections
+    const isGM = mode === 'gm';
+    document.getElementById('john-status-bar').classList.toggle('hidden', !isGM);
+    document.getElementById('gm-controls').classList.toggle('hidden', !isGM);
+
+    // Player-only sections
+    const isPlayer = mode === 'player';
+    document.getElementById('player-panel').classList.toggle('hidden', !isPlayer);
+
+    // Legacy sections always hidden in new modes
+    document.getElementById('main-controls').classList.add('hidden');
+    document.getElementById('voices-container').classList.add('hidden');
+
+    if (isGM) renderGMMode();
+    if (isPlayer) renderPlayerMode();
 }
 
 function renderJohnStatus() {
-    document.getElementById('btn-john-awake').classList.toggle('active', state.session.johnState === 'awake');
-    document.getElementById('btn-john-asleep').classList.toggle('active', state.session.johnState === 'asleep');
-
-    const active = state.voices.find(v => v.id === state.session.activeVoiceId);
-    document.getElementById('active-voice-display').textContent = active ? active.name : 'Nobody';
+    const awakeBtn  = document.getElementById('btn-john-awake');
+    const asleepBtn = document.getElementById('btn-john-asleep');
+    if (awakeBtn)  awakeBtn.classList.toggle('active',  state.session.johnState === 'awake');
+    if (asleepBtn) asleepBtn.classList.toggle('active', state.session.johnState === 'asleep');
 }
 
+function renderGMMode() {
+    renderJohnStatus();
+
+    // Keep the active voice input in sync without clobbering mid-type
+    const input = document.getElementById('active-voice-input');
+    if (input && document.activeElement !== input) {
+        input.value = state.session.activeVoiceName || '';
+    }
+}
+
+function renderPlayerMode() {
+    const panel = document.getElementById('player-panel');
+    const voice = state.voices[0] || null;
+
+    if (!voice) {
+        panel.innerHTML = `
+            <div class="player-setup">
+                <div class="empty-icon">🎭</div>
+                <h2>Set Up Your Character</h2>
+                <p>Create your Voice to get started!</p>
+                <button class="btn btn-primary" id="btn-player-create">➕ Create My Character</button>
+            </div>
+        `;
+        document.getElementById('btn-player-create')
+            .addEventListener('click', openAddVoiceModal);
+    } else {
+        // Clear and rebuild panel
+        panel.innerHTML = '';
+        panel.appendChild(buildPlayerCard(voice));
+        panel.appendChild(buildBidWidget(voice));
+    }
+}
+
+// ── Player bid widget state ───────────────────────────────────────────────
+let playerBidAmount = 0;
+
+function adjustPlayerBid(delta) {
+    const voice = state.voices[0];
+    if (!voice) return;
+    playerBidAmount = Math.max(0, Math.min(voice.willpower, playerBidAmount + delta));
+    renderPlayerMode();
+}
+
+function clearPlayerBid() {
+    playerBidAmount = 0;
+    renderPlayerMode();
+}
+
+function buildPlayerCard(voice) {
+    const score = voice.completions * voice.obsessionLevel;
+    const card  = document.createElement('div');
+    card.className = 'voice-card player-card';
+    card.dataset.id = voice.id;
+
+    const skillsHtml = voice.skills.length
+        ? '<ul>' + voice.skills.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>'
+        : '<span class="no-content">No skills defined yet — tap Edit to add them.</span>';
+
+    // In player mode the obsession is always the player's own secret — show it by default
+    const obsessionShown = voice.obsessionRevealed;
+    const obsessionBtnLabel = obsessionShown ? '🙈 Hide' : '👁 Reveal';
+
+    card.innerHTML = `
+        <div class="card-header">
+            <h2 class="voice-name">${escapeHtml(voice.name)}</h2>
+            <span class="player-badge">🎭 My Character</span>
+        </div>
+
+        <div class="willpower-section">
+            <span class="wp-label">Willpower</span>
+            <div class="wp-controls">
+                <button class="wp-btn" data-action="wp-down" data-id="${voice.id}"
+                    ${voice.willpower <= 0 ? 'disabled' : ''} aria-label="Spend willpower">−</button>
+                <span class="wp-value${voice.willpower === 0 ? ' wp-zero' : ''}">${voice.willpower}</span>
+                <button class="wp-btn" data-action="wp-up" data-id="${voice.id}"
+                    ${voice.willpower >= voice.startWillpower ? 'disabled' : ''} aria-label="Regain willpower">+</button>
+            </div>
+            <span class="wp-max">/ ${voice.startWillpower}</span>
+        </div>
+
+        <div class="skills-section">
+            <span class="section-label">Skills</span>
+            ${skillsHtml}
+        </div>
+
+        <div class="obsession-section">
+            <div class="obsession-header">
+                <span class="section-label" style="margin:0">Obsession (Lvl ${voice.obsessionLevel})</span>
+                <button class="btn-reveal" data-action="toggle-obsession" data-id="${voice.id}">
+                    ${obsessionBtnLabel}
+                </button>
+            </div>
+            <div class="obsession-text${obsessionShown ? '' : ' blurred'}">
+                ${escapeHtml(voice.obsessionText)}
+            </div>
+        </div>
+
+        <div class="completions-section">
+            <span class="comp-label">Completions</span>
+            <div class="comp-controls">
+                <button class="comp-btn" data-action="comp-down" data-id="${voice.id}"
+                    ${voice.completions <= 0 ? 'disabled' : ''} aria-label="Decrease completions">−</button>
+                <span class="comp-value">${voice.completions}</span>
+                <button class="comp-btn" data-action="comp-up" data-id="${voice.id}" aria-label="Increase completions">+</button>
+            </div>
+            <span class="score-display">Score: <strong>${score}</strong></span>
+        </div>
+
+        <div class="card-actions">
+            <button class="btn-edit" data-action="edit" data-id="${voice.id}">✏️ Edit</button>
+            <button class="btn-delete" data-action="delete" data-id="${voice.id}">🗑️ Delete</button>
+        </div>
+    `;
+
+    return card;
+}
+
+function buildBidWidget(voice) {
+    const widget = document.createElement('div');
+    widget.className = 'bid-widget';
+
+    const canIncrease = playerBidAmount < voice.willpower;
+    const canDecrease = playerBidAmount > 0;
+
+    widget.innerHTML = `
+        <div class="bid-widget-header">
+            <h3>🤲 My Bid</h3>
+            <p class="bid-widget-hint">Set your bid, then show your screen to the GM</p>
+        </div>
+        <div class="bid-widget-body">
+            <button class="wp-btn bid-btn" data-action="bid-down"
+                ${canDecrease ? '' : 'disabled'} aria-label="Decrease bid">−</button>
+            <div class="bid-amount-display">
+                <span class="bid-amount">${playerBidAmount}</span>
+                <span class="bid-wp-label">WP</span>
+            </div>
+            <button class="wp-btn bid-btn" data-action="bid-up"
+                ${canIncrease ? '' : 'disabled'} aria-label="Increase bid">+</button>
+        </div>
+        <button class="btn btn-secondary bid-clear-btn" data-action="bid-clear">Clear Bid</button>
+    `;
+
+    return widget;
+}
+
+// ── Voices rendering (legacy / keep for modal-triggered refreshes) ────────
 function renderVoices() {
     const container = document.getElementById('voices-container');
     const emptyState = document.getElementById('empty-state');
 
-    // Remove old cards but keep empty-state node
     container.querySelectorAll('.voice-card').forEach(el => el.remove());
 
     if (state.voices.length === 0) {
@@ -325,7 +506,7 @@ function handleStartWPChange(e) {
     document.getElementById('skill-3-row').classList.toggle('hidden', parseInt(e.target.value, 10) !== 7);
 }
 
-// ── Bid Modal ─────────────────────────────────────────────────────────────
+// ── Bid Modal (legacy, not used in player/gm modes) ───────────────────────
 let bidState = null;
 
 function openBidModal() {
@@ -450,44 +631,65 @@ function recordBid(amount) {
 
 // ── End Session Modal ─────────────────────────────────────────────────────
 function openEndSessionModal() {
-    const sorted = [...state.voices].sort((a, b) =>
-        (b.completions * b.obsessionLevel) - (a.completions * a.obsessionLevel)
-    );
+    const mode = state.session.mode;
 
-    const maxScore = sorted.length ? sorted[0].completions * sorted[0].obsessionLevel : 0;
-
-    const rowsHtml = sorted.map(v => {
-        const score     = v.completions * v.obsessionLevel;
-        const isWinner  = score === maxScore && score > 0;
-        return `
-            <div class="score-row${isWinner ? ' winner' : ''}">
-                <div class="score-voice-info">
-                    <span class="score-voice-name">${isWinner ? '🏆 ' : ''}${escapeHtml(v.name)}</span>
-                    <span class="score-voice-obsession">
-                        Lvl ${v.obsessionLevel}: ${escapeHtml(v.obsessionText)}
-                        (×${v.completions})
-                    </span>
-                </div>
-                <span class="score-points">${score}</span>
+    if (mode === 'gm') {
+        // GM view: just an announcement prompt
+        document.getElementById('end-modal-intro').textContent =
+            'Announce the session end — ask players to reveal their obsessions and share their scores!';
+        document.getElementById('end-content').innerHTML = `
+            <div class="gm-end-note">
+                <p>📣 Tell everyone: <strong>"Session over! Reveal your obsessions and read out your scores."</strong></p>
+                <p>The highest score wins — and that player is usually GM next game!</p>
             </div>
         `;
-    }).join('');
+        document.getElementById('btn-new-session').classList.add('hidden');
+    } else {
+        // Player view: show their own score
+        document.getElementById('btn-new-session').classList.remove('hidden');
+        document.getElementById('end-modal-intro').textContent =
+            'Session over! Reveal your obsession and share your score.';
 
-    document.getElementById('end-content').innerHTML =
-        rowsHtml || '<p style="text-align:center;padding:16px;color:var(--text-muted)">No Voices to show.</p>';
+        const sorted = [...state.voices].sort((a, b) =>
+            (b.completions * b.obsessionLevel) - (a.completions * a.obsessionLevel)
+        );
+        const maxScore = sorted.length ? sorted[0].completions * sorted[0].obsessionLevel : 0;
+
+        const rowsHtml = sorted.map(v => {
+            const score    = v.completions * v.obsessionLevel;
+            const isWinner = score === maxScore && score > 0;
+            return `
+                <div class="score-row${isWinner ? ' winner' : ''}">
+                    <div class="score-voice-info">
+                        <span class="score-voice-name">${isWinner ? '🏆 ' : ''}${escapeHtml(v.name)}</span>
+                        <span class="score-voice-obsession">
+                            Lvl ${v.obsessionLevel}: ${escapeHtml(v.obsessionText)}
+                            (×${v.completions})
+                        </span>
+                    </div>
+                    <span class="score-points">${score}</span>
+                </div>
+            `;
+        }).join('');
+
+        document.getElementById('end-content').innerHTML =
+            rowsHtml || '<p style="text-align:center;padding:16px;color:var(--text-muted)">No character to show.</p>';
+    }
 
     openModal('end-modal');
 }
 
 function startNewSession() {
-    if (!confirm('Start a new session? This resets all Willpower and completion counts.')) return;
+    if (!confirm('Start a new session? This resets Willpower and completion counts.')) return;
     state.voices.forEach(v => {
         v.willpower        = v.startWillpower;
         v.completions      = 0;
         v.obsessionRevealed = false;
     });
-    state.session.activeVoiceId = null;
-    state.session.johnState     = 'awake';
+    state.session.activeVoiceId   = null;
+    state.session.activeVoiceName = '';
+    state.session.johnState       = 'awake';
+    playerBidAmount = 0;
     saveState();
     render();
     closeModal('end-modal');
@@ -506,12 +708,36 @@ function bindEvents() {
     // Header
     document.getElementById('btn-roll-d6').addEventListener('click', rollD6);
     document.getElementById('btn-rules').addEventListener('click', () => openModal('rules-modal'));
+    document.getElementById('btn-switch-mode').addEventListener('click', () => {
+        if (confirm('Switch mode? This page will reset to the mode selector.')) {
+            state.session.mode = null;
+            saveState();
+            render();
+        }
+    });
 
-    // John state toggles
+    // Mode selector
+    document.getElementById('btn-mode-player').addEventListener('click', () => setMode('player'));
+    document.getElementById('btn-mode-gm').addEventListener('click',     () => setMode('gm'));
+
+    // John state toggles (GM)
     document.getElementById('btn-john-awake').addEventListener('click',  () => setJohnState('awake'));
     document.getElementById('btn-john-asleep').addEventListener('click', () => setJohnState('asleep'));
 
-    // Main control buttons
+    // Active voice text input (GM)
+    document.getElementById('active-voice-input').addEventListener('input', e => {
+        state.session.activeVoiceName = e.target.value;
+        saveState();
+    });
+
+    // GM controls
+    document.getElementById('btn-gm-john-sleeps').addEventListener('click', () => {
+        setJohnState('asleep');
+        showToast('💤 John sleeps! Remind players to gain 1 WP each.', 3500);
+    });
+    document.getElementById('btn-gm-end-session').addEventListener('click', openEndSessionModal);
+
+    // Legacy main controls (not shown in player/gm modes, kept for safety)
     document.getElementById('btn-add-voice').addEventListener('click',   openAddVoiceModal);
     document.getElementById('btn-bid').addEventListener('click',          openBidModal);
     document.getElementById('btn-john-sleeps').addEventListener('click', johnSleeps);
@@ -538,7 +764,7 @@ function bindEvents() {
     document.getElementById('btn-close-rules').addEventListener('click',  () => closeModal('rules-modal'));
     document.getElementById('btn-close-rules-2').addEventListener('click', () => closeModal('rules-modal'));
 
-    // ── Delegated card events ──
+    // Delegated card events (legacy voices-container)
     document.getElementById('voices-container').addEventListener('click', e => {
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
@@ -556,17 +782,40 @@ function bindEvents() {
         }
     });
 
+    // Delegated card events (player-panel)
+    document.getElementById('player-panel').addEventListener('click', e => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const { action, id } = btn.dataset;
+        switch (action) {
+            case 'wp-up':            adjustWillpower(id, +1);   break;
+            case 'wp-down':          adjustWillpower(id, -1);   break;
+            case 'comp-up':          adjustCompletions(id, +1); break;
+            case 'comp-down':        adjustCompletions(id, -1); break;
+            case 'toggle-obsession': toggleObsessionReveal(id); break;
+            case 'edit':             openEditVoiceModal(id);    break;
+            case 'delete':           deleteVoice(id);           break;
+            case 'bid-up':           adjustPlayerBid(+1);       break;
+            case 'bid-down':         adjustPlayerBid(-1);       break;
+            case 'bid-clear':        clearPlayerBid();          break;
+        }
+    });
+
     // Close modals on backdrop click
     document.querySelectorAll('.modal-overlay').forEach(overlay => {
         overlay.addEventListener('click', e => {
-            if (e.target === overlay) overlay.classList.add('hidden');
+            if (e.target === overlay && overlay.id !== 'mode-select-overlay') {
+                overlay.classList.add('hidden');
+            }
         });
     });
 
-    // Close modals on Escape
+    // Close modals on Escape (not mode-select)
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
-            document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(m => m.classList.add('hidden'));
+            document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(m => {
+                if (m.id !== 'mode-select-overlay') m.classList.add('hidden');
+            });
         }
     });
 }

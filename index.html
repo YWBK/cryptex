@@ -8,20 +8,45 @@
 </head>
 <body>
 
+    <!-- ── Mode Select Overlay ── -->
+    <div id="mode-select-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="mode-select-title">
+        <div class="modal-box mode-select-box">
+            <div class="mode-select-header">
+                <div class="mode-select-icon">🧠</div>
+                <h2 id="mode-select-title">Everyone is John</h2>
+                <p class="mode-select-sub">Voice Tracker</p>
+            </div>
+            <p class="mode-select-intro">How will you use this app today?</p>
+            <div class="mode-select-options">
+                <button id="btn-mode-player" class="mode-option-btn">
+                    <span class="mode-option-icon">🎭</span>
+                    <strong>I'm a Player</strong>
+                    <span class="mode-option-desc">Track your character sheet, roll dice, and make bids privately on your own screen</span>
+                </button>
+                <button id="btn-mode-gm" class="mode-option-btn">
+                    <span class="mode-option-icon">🎲</span>
+                    <strong>I'm the GM</strong>
+                    <span class="mode-option-desc">Track the active voice, roll dice, and refer to the rules</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ── App Header ── -->
     <header class="app-header">
         <div class="header-content">
             <h1>🧠 Everyone is John</h1>
-            <p class="header-subtitle">Voice Tracker</p>
+            <p class="header-subtitle" id="header-mode-label">Voice Tracker</p>
         </div>
         <div class="header-actions">
             <button id="btn-roll-d6" class="btn-icon" aria-label="Roll a six-sided die" title="Roll a d6">🎲</button>
             <button id="btn-rules" class="btn-icon" aria-label="View quick rules" title="Quick Rules">📜</button>
+            <button id="btn-switch-mode" class="btn-icon" aria-label="Switch mode" title="Switch Mode">⚙️</button>
         </div>
     </header>
 
-    <!-- ── John Status Bar ── -->
-    <div id="john-status-bar">
+    <!-- ── John Status Bar (GM only) ── -->
+    <div id="john-status-bar" class="hidden">
         <div class="status-group">
             <span class="status-label">John is:</span>
             <div class="state-toggle">
@@ -31,20 +56,32 @@
         </div>
         <div class="status-group">
             <span class="status-label">In Control:</span>
-            <span id="active-voice-display" class="active-voice-name">Nobody</span>
+            <input id="active-voice-input" type="text" class="active-voice-input"
+                placeholder="type voice name…" maxlength="50" autocomplete="off">
         </div>
     </div>
 
-    <!-- ── Main Controls ── -->
-    <div id="main-controls">
+    <!-- ── GM Controls (GM only) ── -->
+    <div id="gm-controls" class="hidden">
+        <button id="btn-gm-john-sleeps" class="btn btn-secondary">💤 John Sleeps (+1 WP)</button>
+        <button id="btn-gm-end-session" class="btn btn-danger">🏁 End Session</button>
+    </div>
+
+    <!-- ── Player Panel (Player only) ── -->
+    <div id="player-panel" class="hidden">
+        <!-- Populated by JS -->
+    </div>
+
+    <!-- ── Legacy controls (hidden in new modes, kept for modals) ── -->
+    <div id="main-controls" class="hidden">
         <button id="btn-add-voice" class="btn btn-primary">➕ Add Voice</button>
         <button id="btn-bid" class="btn btn-accent">🤲 Bid for Control</button>
         <button id="btn-john-sleeps" class="btn btn-secondary">💤 John Sleeps (+1 WP)</button>
         <button id="btn-end-session" class="btn btn-danger">🏁 End Session</button>
     </div>
 
-    <!-- ── Voices Grid ── -->
-    <main id="voices-container">
+    <!-- ── Voices Grid (hidden in new modes) ── -->
+    <main id="voices-container" class="hidden">
         <div id="empty-state">
             <div class="empty-icon">🧠</div>
             <h2>No Voices Yet</h2>
@@ -129,7 +166,7 @@
                 <h2 id="end-modal-title">🏁 Session Over!</h2>
                 <button class="btn-close" id="btn-close-end-modal" aria-label="Close">✕</button>
             </div>
-            <p class="modal-intro">Reveal your obsessions — highest score wins!</p>
+            <p class="modal-intro" id="end-modal-intro">Reveal your obsessions — highest score wins!</p>
             <div id="end-content">
                 <!-- Dynamically rendered -->
             </div>
