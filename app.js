@@ -1,599 +1,578 @@
-// Scene setup
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x3a2515);
-scene.fog = new THREE.Fog(0x3a2515, 10, 50);
+'use strict';
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 0, 8);
+// ── Storage key ───────────────────────────────────────────────────────────
+const STORAGE_KEY = 'everyone-is-john-v1';
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-const container = document.getElementById('container');
-container.appendChild(renderer.domElement);
-
-// Lighting - warm desert ambiance
-const ambientLight = new THREE.AmbientLight(0xf4e4c1, 0.5);
-scene.add(ambientLight);
-
-const directionalLight = new THREE.DirectionalLight(0xffd700, 0.8);
-directionalLight.position.set(5, 10, 7);
-directionalLight.castShadow = true;
-scene.add(directionalLight);
-
-const pointLight = new THREE.PointLight(0xffaa00, 0.6);
-pointLight.position.set(-5, 5, 5);
-scene.add(pointLight);
-
-// Sound effects
-const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-// Create heavy metal click sound for dial rotation
-function playClickSound() {
-    const now = audioContext.currentTime;
-    
-    // Create noise buffer for metallic sound
-    const bufferSize = audioContext.sampleRate * 0.08;
-    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-    const data = buffer.getChannelData(0);
-    
-    // Generate noise with decay
-    for (let i = 0; i < bufferSize; i++) {
-        const decay = 1 - (i / bufferSize);
-        data[i] = (Math.random() * 2 - 1) * decay * 0.3;
+// ── State ─────────────────────────────────────────────────────────────────
+let state = {
+    voices: [],
+    session: {
+        johnState: 'awake',   // 'awake' | 'asleep'
+        activeVoiceId: null
     }
-    
-    const noise = audioContext.createBufferSource();
-    noise.buffer = buffer;
-    
-    // Low-pass filter for metallic quality
-    const filter = audioContext.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = 1200;
-    filter.Q.value = 1;
-    
-    // Add a low thump
-    const oscillator = audioContext.createOscillator();
-    oscillator.frequency.value = 120;
-    oscillator.type = 'triangle';
-    
-    const oscGain = audioContext.createGain();
-    oscGain.gain.setValueAtTime(0.4, now);
-    oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-    
-    const noiseGain = audioContext.createGain();
-    noiseGain.gain.setValueAtTime(0.5, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-    
-    noise.connect(filter);
-    filter.connect(noiseGain);
-    noiseGain.connect(audioContext.destination);
-    
-    oscillator.connect(oscGain);
-    oscGain.connect(audioContext.destination);
-    
-    noise.start(now);
-    noise.stop(now + 0.08);
-    oscillator.start(now);
-    oscillator.stop(now + 0.08);
-}
+};
 
-// Create heavy metal unlock sound
-function playUnlockSound() {
-    const now = audioContext.currentTime;
-    
-    // Create metallic clang
-    const bufferSize = audioContext.sampleRate * 0.8;
-    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-    const data = buffer.getChannelData(0);
-    
-    for (let i = 0; i < bufferSize; i++) {
-        const decay = Math.exp(-i / (audioContext.sampleRate * 0.3));
-        data[i] = (Math.random() * 2 - 1) * decay * 0.4;
-    }
-    
-    const noise = audioContext.createBufferSource();
-    noise.buffer = buffer;
-    
-    const filter = audioContext.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 800;
-    filter.Q.value = 2;
-    
-    // Deep metallic clunk
-    const osc1 = audioContext.createOscillator();
-    osc1.frequency.setValueAtTime(150, now);
-    osc1.frequency.exponentialRampToValueAtTime(80, now + 0.3);
-    osc1.type = 'triangle';
-    
-    // High metallic ring
-    const osc2 = audioContext.createOscillator();
-    osc2.frequency.value = 1800;
-    osc2.type = 'sine';
-    
-    const gain1 = audioContext.createGain();
-    gain1.gain.setValueAtTime(0.5, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-    
-    const gain2 = audioContext.createGain();
-    gain2.gain.setValueAtTime(0.3, now);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-    
-    const noiseGain = audioContext.createGain();
-    noiseGain.gain.setValueAtTime(0.4, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-    
-    noise.connect(filter);
-    filter.connect(noiseGain);
-    noiseGain.connect(audioContext.destination);
-    
-    osc1.connect(gain1);
-    gain1.connect(audioContext.destination);
-    
-    osc2.connect(gain2);
-    gain2.connect(audioContext.destination);
-    
-    noise.start(now);
-    noise.stop(now + 0.8);
-    osc1.start(now);
-    osc1.stop(now + 0.4);
-    osc2.start(now);
-    osc2.stop(now + 0.8);
-}
-
-// Cryptex configuration
-const SYMBOLS = ['I', 'V', 'II', 'VV', 'III', 'VVV', 'IV', 'IVV'];
-const CORRECT_CODE = ['I', 'IV', 'II', 'I']; // You can change this
-const NUM_DIALS = 4;
-
-// Materials
-const bodyMaterial = new THREE.MeshStandardMaterial({
-    color: 0xc9a961,
-    metalness: 0.6,
-    roughness: 0.4
-});
-
-const dialMaterial = new THREE.MeshStandardMaterial({
-    color: 0xd4af37,
-    metalness: 0.5,
-    roughness: 0.5
-});
-
-const markerMaterial = new THREE.MeshStandardMaterial({
-    color: 0x8b0000,
-    metalness: 0.7,
-    roughness: 0.3,
-    emissive: 0x8b0000,
-    emissiveIntensity: 0.3
-});
-
-// Cryptex state
-const cryptex = new THREE.Group();
-const dials = [];
-
-// Generate random starting positions that don't match the correct code
-const dialStates = CORRECT_CODE.map((correctSymbol, index) => {
-    const correctIndex = SYMBOLS.indexOf(correctSymbol);
-    let randomIndex;
-    
-    // Keep generating random indices until we get one that's not the correct one
-    do {
-        randomIndex = Math.floor(Math.random() * SYMBOLS.length);
-    } while (randomIndex === correctIndex);
-    
-    return randomIndex;
-});
-
-let isUnlocked = false;
-
-// Create main cryptex body
-function createCryptexBody() {
-    const bodyGroup = new THREE.Group();
-    
-    // Main cylinder
-    const bodyGeometry = new THREE.CylinderGeometry(1.5, 1.5, 8, 32);
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.rotation.z = Math.PI / 2;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    bodyGroup.add(body);
-    
-    // End caps
-    const capGeometry = new THREE.CylinderGeometry(1.3, 1.3, 0.3, 32);
-    const leftCap = new THREE.Mesh(capGeometry, bodyMaterial);
-    leftCap.position.x = -4.2;
-    leftCap.rotation.z = Math.PI / 2;
-    leftCap.castShadow = true;
-    bodyGroup.add(leftCap);
-    
-    const rightCap = new THREE.Mesh(capGeometry, bodyMaterial);
-    rightCap.position.x = 4.2;
-    rightCap.rotation.z = Math.PI / 2;
-    rightCap.castShadow = true;
-    bodyGroup.add(rightCap);
-    
-    // Decorative rings
-    for (let i = -3; i <= 3; i += 1.5) {
-        if (Math.abs(i) > 0.5) {
-            const ringGeometry = new THREE.TorusGeometry(1.6, 0.08, 16, 32);
-            const ring = new THREE.Mesh(ringGeometry, bodyMaterial);
-            ring.position.x = i;
-            ring.rotation.y = Math.PI / 2;
-            bodyGroup.add(ring);
+// ── Persistence ───────────────────────────────────────────────────────────
+function loadState() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            // Shallow merge so future schema additions survive
+            if (parsed.voices)  state.voices  = parsed.voices;
+            if (parsed.session) state.session = { ...state.session, ...parsed.session };
         }
+    } catch (e) {
+        console.warn('Failed to load state:', e);
     }
-    
-    // Add alignment notches
-    const notchMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8b0000,
-        metalness: 0.7,
-        roughness: 0.3
+}
+
+function saveState() {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+        console.warn('Failed to save state:', e);
+    }
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────
+function genId() {
+    return crypto.randomUUID();
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+let toastTimer = null;
+function showToast(msg, ms = 2800) {
+    const el = document.getElementById('toast');
+    document.getElementById('toast-message').textContent = msg;
+    el.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.add('hidden'), ms);
+}
+
+function openModal(id)  { document.getElementById(id).classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+// ── Voice Operations ──────────────────────────────────────────────────────
+function addVoice(data) {
+    const startWP = parseInt(data.startWillpower, 10);
+    state.voices.push({
+        id:               genId(),
+        name:             data.name,
+        willpower:        startWP,
+        startWillpower:   startWP,
+        skills:           data.skills.filter(s => s.trim() !== ''),
+        obsessionLevel:   parseInt(data.obsessionLevel, 10),
+        obsessionText:    data.obsessionText,
+        obsessionRevealed: false,
+        completions:      0
     });
-    
-    // Calculate dial positions (same spacing as dials)
-    const spacing = 1.8;
-    const firstDialPos = -(NUM_DIALS - 1) / 2 * spacing;
-    const lastDialPos = (NUM_DIALS - 1) / 2 * spacing;
-    
-    // Notch before first dial
-    const notchGeometry = new THREE.BoxGeometry(0.225, 0.1, 0.1);
-    const leftNotch = new THREE.Mesh(notchGeometry, notchMaterial);
-    leftNotch.position.set(firstDialPos - 0.7, 1.55, 0);
-    bodyGroup.add(leftNotch);
-    
-    // Notch after last dial
-    const rightNotch = new THREE.Mesh(notchGeometry, notchMaterial);
-    rightNotch.position.set(lastDialPos + 0.7, 1.55, 0);
-    bodyGroup.add(rightNotch);
-    
-    return bodyGroup;
+    saveState();
+    renderVoices();
 }
 
-// Create a dial with symbols
-function createDial(index) {
-    const dialGroup = new THREE.Group();
-    dialGroup.userData.index = index;
-    dialGroup.userData.isHovered = false;
-    
-    // Dial cylinder (slightly larger than body)
-    const dialGeometry = new THREE.CylinderGeometry(1.65, 1.65, 1.2, 32);
-    const dialMesh = new THREE.Mesh(dialGeometry, dialMaterial);
-    dialMesh.rotation.z = Math.PI / 2;
-    dialMesh.castShadow = true;
-    dialGroup.add(dialMesh);
-    
-    // Add symbols around the dial
-    const symbolRadius = 1.7;
-    const angleStep = (Math.PI * 2) / SYMBOLS.length;
-    
-    SYMBOLS.forEach((symbol, symbolIndex) => {
-        const angle = symbolIndex * angleStep;
-        const x = 0;
-        const y = symbolRadius * Math.cos(angle);
-        const z = symbolRadius * Math.sin(angle);
-        
-        // Create text using canvas texture
-        const canvas = document.createElement('canvas');
-        canvas.width = 128;
-        canvas.height = 128;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#f4e4c1';
-        ctx.font = 'bold 60px Georgia';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(symbol, 64, 64);
-        
-        const texture = new THREE.CanvasTexture(canvas);
-        const symbolMaterial = new THREE.MeshBasicMaterial({ 
-            map: texture, 
-            transparent: true,
-            side: THREE.DoubleSide
-        });
-        
-        const symbolGeometry = new THREE.PlaneGeometry(0.6, 0.6);
-        const symbolMesh = new THREE.Mesh(symbolGeometry, symbolMaterial);
-        symbolMesh.position.set(x, y, z);
-        
-        // Face the symbol outward from the cylinder
-        symbolMesh.lookAt(x, y * 2, z * 2);
-        
-        // Keep text upright relative to the world (not the cylinder surface)
-        // This ensures text is readable when it rotates to the top
-        // Rotate symbols 270 degrees
-        symbolMesh.rotation.z = Math.PI / 2;
-        symbolMesh.rotation.x = -Math.PI / 2 + angle;
-        
-        dialGroup.add(symbolMesh);
+function updateVoice(id, data) {
+    const v = state.voices.find(v => v.id === id);
+    if (!v) return;
+    v.name           = data.name;
+    v.startWillpower = parseInt(data.startWillpower, 10);
+    v.skills         = data.skills.filter(s => s.trim() !== '');
+    v.obsessionLevel = parseInt(data.obsessionLevel, 10);
+    v.obsessionText  = data.obsessionText;
+    saveState();
+    renderVoices();
+}
+
+function deleteVoice(id) {
+    if (!confirm('Delete this Voice permanently?')) return;
+    state.voices = state.voices.filter(v => v.id !== id);
+    if (state.session.activeVoiceId === id) state.session.activeVoiceId = null;
+    saveState();
+    render();
+}
+
+function adjustWillpower(id, delta) {
+    const v = state.voices.find(v => v.id === id);
+    if (!v) return;
+    v.willpower = Math.max(0, Math.min(v.startWillpower, v.willpower + delta));
+    saveState();
+    renderVoices();
+    renderJohnStatus();
+
+    // Check all-zero condition (only worth iterating if this voice just hit 0)
+    if (delta < 0 && v.willpower === 0 && state.voices.every(v => v.willpower === 0)) {
+        showToast('💀 All Voices at 0 Willpower — session is over!', 4000);
+        setTimeout(openEndSessionModal, 2200);
+    }
+}
+
+function adjustCompletions(id, delta) {
+    const v = state.voices.find(v => v.id === id);
+    if (!v) return;
+    v.completions = Math.max(0, v.completions + delta);
+    saveState();
+    renderVoices();
+}
+
+function toggleObsessionReveal(id) {
+    const v = state.voices.find(v => v.id === id);
+    if (!v) return;
+    v.obsessionRevealed = !v.obsessionRevealed;
+    saveState();
+    renderVoices();
+}
+
+function setActiveVoice(id) {
+    state.session.activeVoiceId = id;
+    saveState();
+    render();
+}
+
+function clearActiveVoice() {
+    state.session.activeVoiceId = null;
+    saveState();
+    render();
+}
+
+function setJohnState(johnState) {
+    state.session.johnState = johnState;
+    saveState();
+    renderJohnStatus();
+}
+
+function johnSleeps() {
+    state.voices.forEach(v => {
+        v.willpower = Math.min(v.startWillpower, v.willpower + 1);
     });
-    
-    // Position dial along the cryptex
-    const spacing = 1.8;
-    dialGroup.position.x = (index - (NUM_DIALS - 1) / 2) * spacing;
-    
-    return dialGroup;
+    setJohnState('asleep');
+    saveState();
+    render();
+    showToast('💤 John sleeps. All Voices gain 1 Willpower!');
 }
 
-// Create marker to indicate alignment
-function createMarker() {
-    const markerGroup = new THREE.Group();
-    
-    // Arrow shape pointing to the alignment
-    const markerGeometry = new THREE.ConeGeometry(0.2, 0.6, 4);
-    const marker = new THREE.Mesh(markerGeometry, markerMaterial);
-    marker.position.y = 2.5;
-    marker.rotation.z = Math.PI;
-    markerGroup.add(marker);
-    
-    return markerGroup;
+// ── Rendering ─────────────────────────────────────────────────────────────
+function render() {
+    renderJohnStatus();
+    renderVoices();
 }
 
-// Create the hidden key
-function createKey() {
-    const keyGroup = new THREE.Group();
-    
-    // Key shaft
-    const shaftGeometry = new THREE.CylinderGeometry(0.1, 0.1, 2, 16);
-    const keyMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffd700,
-        metalness: 0.9,
-        roughness: 0.1,
-        emissive: 0xffd700,
-        emissiveIntensity: 0.5
+function renderJohnStatus() {
+    document.getElementById('btn-john-awake').classList.toggle('active', state.session.johnState === 'awake');
+    document.getElementById('btn-john-asleep').classList.toggle('active', state.session.johnState === 'asleep');
+
+    const active = state.voices.find(v => v.id === state.session.activeVoiceId);
+    document.getElementById('active-voice-display').textContent = active ? active.name : 'Nobody';
+}
+
+function renderVoices() {
+    const container = document.getElementById('voices-container');
+    const emptyState = document.getElementById('empty-state');
+
+    // Remove old cards but keep empty-state node
+    container.querySelectorAll('.voice-card').forEach(el => el.remove());
+
+    if (state.voices.length === 0) {
+        emptyState.classList.remove('hidden');
+        return;
+    }
+
+    emptyState.classList.add('hidden');
+
+    state.voices.forEach(voice => {
+        container.insertBefore(buildVoiceCard(voice), emptyState);
     });
-    const shaft = new THREE.Mesh(shaftGeometry, keyMaterial);
-    shaft.rotation.z = Math.PI / 2;
-    keyGroup.add(shaft);
-    
-    // Key head
-    const headGeometry = new THREE.TorusGeometry(0.4, 0.1, 16, 32);
-    const head = new THREE.Mesh(headGeometry, keyMaterial);
-    head.position.x = -1.2;
-    head.rotation.y = Math.PI / 2;
-    keyGroup.add(head);
-    
-    // Key teeth
-    for (let i = 0; i < 3; i++) {
-        const toothGeometry = new THREE.BoxGeometry(0.15, 0.3, 0.08);
-        const tooth = new THREE.Mesh(toothGeometry, keyMaterial);
-        tooth.position.set(0.3 + i * 0.3, -0.15, 0);
-        keyGroup.add(tooth);
-    }
-    
-    keyGroup.position.set(0, 0, 0);
-    keyGroup.scale.set(0, 0, 0);
-    keyGroup.rotation.y = Math.PI / 4;
-    
-    return keyGroup;
 }
 
-// Build the cryptex
-const body = createCryptexBody();
-cryptex.add(body);
+function buildVoiceCard(voice) {
+    const isActive = voice.id === state.session.activeVoiceId;
+    const score    = voice.completions * voice.obsessionLevel;
 
-for (let i = 0; i < NUM_DIALS; i++) {
-    const dial = createDial(i);
-    dials.push(dial);
-    cryptex.add(dial);
-    
-    // Set initial rotation based on random dial state
-    const initialRotation = -(dialStates[i] * (Math.PI * 2) / SYMBOLS.length);
-    dial.rotation.x = initialRotation;
+    const card = document.createElement('div');
+    card.className = 'voice-card' + (isActive ? ' is-active' : '');
+    card.dataset.id = voice.id;
+
+    const skillsHtml = voice.skills.length
+        ? '<ul>' + voice.skills.map(s => `<li>${escapeHtml(s)}</li>`).join('') + '</ul>'
+        : '<span class="no-content">No skills defined.</span>';
+
+    const controlBtn = isActive
+        ? `<button class="btn-control is-active" data-action="relinquish" data-id="${voice.id}">✓ In Control</button>`
+        : `<button class="btn-control" data-action="make-active" data-id="${voice.id}">Take Control</button>`;
+
+    card.innerHTML = `
+        <div class="card-header">
+            <h2 class="voice-name">${escapeHtml(voice.name)}</h2>
+            ${isActive ? '<span class="active-badge">🧠 In Control</span>' : ''}
+        </div>
+
+        <div class="willpower-section">
+            <span class="wp-label">Willpower</span>
+            <div class="wp-controls">
+                <button class="wp-btn" data-action="wp-down" data-id="${voice.id}"
+                    ${voice.willpower <= 0 ? 'disabled' : ''} aria-label="Decrease willpower">−</button>
+                <span class="wp-value${voice.willpower === 0 ? ' wp-zero' : ''}">${voice.willpower}</span>
+                <button class="wp-btn" data-action="wp-up" data-id="${voice.id}"
+                    ${voice.willpower >= voice.startWillpower ? 'disabled' : ''} aria-label="Increase willpower">+</button>
+            </div>
+            <span class="wp-max">/ ${voice.startWillpower}</span>
+        </div>
+
+        <div class="skills-section">
+            <span class="section-label">Skills</span>
+            ${skillsHtml}
+        </div>
+
+        <div class="obsession-section">
+            <div class="obsession-header">
+                <span class="section-label" style="margin:0">Obsession (Lvl ${voice.obsessionLevel})</span>
+                <button class="btn-reveal" data-action="toggle-obsession" data-id="${voice.id}">
+                    ${voice.obsessionRevealed ? '🙈 Hide' : '👁 Reveal'}
+                </button>
+            </div>
+            <div class="obsession-text${voice.obsessionRevealed ? '' : ' blurred'}">
+                ${escapeHtml(voice.obsessionText)}
+            </div>
+        </div>
+
+        <div class="completions-section">
+            <span class="comp-label">Completions</span>
+            <div class="comp-controls">
+                <button class="comp-btn" data-action="comp-down" data-id="${voice.id}"
+                    ${voice.completions <= 0 ? 'disabled' : ''} aria-label="Decrease completions">−</button>
+                <span class="comp-value">${voice.completions}</span>
+                <button class="comp-btn" data-action="comp-up" data-id="${voice.id}" aria-label="Increase completions">+</button>
+            </div>
+            <span class="score-display">Score: <strong>${score}</strong></span>
+        </div>
+
+        <div class="card-actions">
+            ${controlBtn}
+            <button class="btn-edit" data-action="edit" data-id="${voice.id}">✏️ Edit</button>
+            <button class="btn-delete" data-action="delete" data-id="${voice.id}">🗑️ Delete</button>
+        </div>
+    `;
+
+    return card;
 }
 
-const key = createKey();
-scene.add(key);
-
-// Rotate cryptex so notches face the viewer
-cryptex.rotation.x = Math.PI / 2;
-cryptex.rotation.y = (Math.PI * 3) / 2;
-
-scene.add(cryptex);
-
-// Mouse interaction
-let isDragging = false;
-let isMouseDown = false;
-let previousMousePosition = { x: 0, y: 0 };
-let mouseDownPosition = { x: 0, y: 0 };
-let mouseDownTime = 0;
-let lastDialClickTime = 0;
-const DIAL_CLICK_COOLDOWN = 500; // milliseconds between dial clicks
-
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-
-// Add both mouse and touch event listeners
-renderer.domElement.addEventListener('mousedown', onPointerDown);
-renderer.domElement.addEventListener('mousemove', onPointerMove);
-renderer.domElement.addEventListener('mouseup', onPointerUp);
-renderer.domElement.addEventListener('touchstart', onPointerDown, { passive: false });
-renderer.domElement.addEventListener('touchmove', onPointerMove, { passive: false });
-renderer.domElement.addEventListener('touchend', onPointerUp);
-renderer.domElement.addEventListener('touchcancel', onPointerUp);
-
-// Unified pointer handler to get coordinates from mouse or touch
-function getPointerPosition(event) {
-    if (event.touches && event.touches.length > 0) {
-        return { x: event.touches[0].clientX, y: event.touches[0].clientY };
-    }
-    return { x: event.clientX, y: event.clientY };
+// ── Voice Modal ───────────────────────────────────────────────────────────
+function openAddVoiceModal() {
+    document.getElementById('voice-modal-title').textContent = 'Add Voice';
+    document.getElementById('edit-voice-id').value = '';
+    document.getElementById('voice-form').reset();
+    document.getElementById('skill-3-row').classList.add('hidden');
+    openModal('voice-modal');
+    document.getElementById('input-name').focus();
 }
 
-function onPointerDown(event) {
-    if (isUnlocked) return;
-    
-    // Prevent default touch behavior
-    if (event.touches) {
-        event.preventDefault();
-    }
-    
-    const pos = getPointerPosition(event);
-    
-    isMouseDown = true;
-    isDragging = false;
-    previousMousePosition = pos;
-    mouseDownPosition = pos;
-    mouseDownTime = Date.now();
+function openEditVoiceModal(id) {
+    const v = state.voices.find(v => v.id === id);
+    if (!v) return;
+
+    document.getElementById('voice-modal-title').textContent = 'Edit Voice';
+    document.getElementById('edit-voice-id').value = id;
+    document.getElementById('input-name').value = v.name;
+    document.getElementById('input-start-wp').value = v.startWillpower;
+    document.getElementById('skill-1').value = v.skills[0] || '';
+    document.getElementById('skill-2').value = v.skills[1] || '';
+    document.getElementById('skill-3').value = v.skills[2] || '';
+    document.getElementById('skill-3-row').classList.toggle('hidden', v.startWillpower !== 7);
+    document.getElementById('input-obsession-level').value = v.obsessionLevel;
+    document.getElementById('input-obsession-text').value = v.obsessionText;
+
+    openModal('voice-modal');
+    document.getElementById('input-name').focus();
 }
 
-function onPointerMove(event) {
-    if (isUnlocked || !isMouseDown) return;
-    
-    // Prevent default touch behavior
-    if (event.touches) {
-        event.preventDefault();
-    }
-    
-    const pos = getPointerPosition(event);
-    const deltaX = pos.x - previousMousePosition.x;
-    const deltaY = pos.y - previousMousePosition.y;
-    
-    // If mouse moves significantly, it's a drag
-    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
-        isDragging = true;
-        
-        // Rotate entire cryptex
-        cryptex.rotation.y += deltaX * 0.01;
-        cryptex.rotation.x += deltaY * 0.01;
-        
-        previousMousePosition = pos;
-    }
-}
+function handleVoiceFormSubmit(e) {
+    e.preventDefault();
+    const name = document.getElementById('input-name').value.trim();
+    if (!name) { document.getElementById('input-name').focus(); return; }
 
-function onPointerUp(event) {
-    if (isUnlocked) return;
-    
-    // Get position from touch or mouse
-    const pos = event.changedTouches && event.changedTouches.length > 0 
-        ? { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY }
-        : { x: event.clientX, y: event.clientY };
-    
-    // Check if this was a click/tap (not a drag)
-    const timeDiff = Date.now() - mouseDownTime;
-    const distanceMoved = Math.sqrt(
-        Math.pow(pos.x - mouseDownPosition.x, 2) + 
-        Math.pow(pos.y - mouseDownPosition.y, 2)
-    );
-    
-    // If pointer didn't move much and release was quick, treat it as a click/tap
-    if (!isDragging && timeDiff < 300 && distanceMoved < 5) {
-        // Check cooldown period
-        const currentTime = Date.now();
-        if (currentTime - lastDialClickTime < DIAL_CLICK_COOLDOWN) {
-            isMouseDown = false;
-            isDragging = false;
-            return; // Ignore click if within cooldown period
-        }
-        
-        mouse.x = (pos.x / window.innerWidth) * 2 - 1;
-        mouse.y = -(pos.y / window.innerHeight) * 2 + 1;
-        
-        raycaster.setFromCamera(mouse, camera);
-        
-        // Check if clicking on a dial
-        const dialMeshes = dials.map(d => d.children[0]);
-        const intersects = raycaster.intersectObjects(dialMeshes);
-        
-        if (intersects.length > 0) {
-            const dialMesh = intersects[0].object;
-            const clickedDial = dialMesh.parent;
-            const dialIndex = clickedDial.userData.index;
-            
-            // Rotate dial to next symbol
-            dialStates[dialIndex] = (dialStates[dialIndex] + 1) % SYMBOLS.length;
-            
-            const targetRotation = -(dialStates[dialIndex] * (Math.PI * 2) / SYMBOLS.length);
-            clickedDial.rotation.x = targetRotation;
-            
-            lastDialClickTime = currentTime; // Update last click time
-            
-            // Play click sound
-            playClickSound();
-            
-            checkCode();
-        }
-    }
-    
-    isMouseDown = false;
-    isDragging = false;
-}
+    const obsessionText = document.getElementById('input-obsession-text').value.trim();
+    if (!obsessionText) { document.getElementById('input-obsession-text').focus(); return; }
 
-// Check if code is correct
-function checkCode() {
-    if (isUnlocked) return;
-    
-    const currentCode = dialStates.map(state => SYMBOLS[state]);
-    const isCorrect = currentCode.every((symbol, index) => symbol === CORRECT_CODE[index]);
-    
-    if (isCorrect) {
-        unlockCryptex();
-    }
-}
+    const startWP = parseInt(document.getElementById('input-start-wp').value, 10);
+    const skills  = [
+        document.getElementById('skill-1').value.trim(),
+        document.getElementById('skill-2').value.trim()
+    ];
+    if (startWP === 7) skills.push(document.getElementById('skill-3').value.trim());
 
-// Unlock animation
-function unlockCryptex() {
-    isUnlocked = true;
-    
-    // Play unlock sound
-    playUnlockSound();
-    
-    // Show success message
-    document.getElementById('success-message').classList.remove('hidden');
-    
-    // Animate cryptex opening - slide right end cap out
-    const openAnimation = () => {
-        // Find the right cap in the body group
-        const bodyGroup = cryptex.children.find(child => child.type === 'Group' && child.children.length > 5);
-        if (bodyGroup) {
-            const rightCap = bodyGroup.children.find(child => child.position.x > 4);
-            if (rightCap && rightCap.position.x < 6) {
-                rightCap.position.x += 0.03;
-            }
-        }
-        
-        // Reveal key
-        if (key.scale.x < 1.5) {
-            key.scale.x += 0.02;
-            key.scale.y += 0.02;
-            key.scale.z += 0.02;
-            key.rotation.y += 0.05;
-        }
-        
-        // Continue animation until cap is fully extended
-        const bodyGroup2 = cryptex.children.find(child => child.type === 'Group' && child.children.length > 5);
-        if (bodyGroup2) {
-            const rightCap2 = bodyGroup2.children.find(child => child.position.x > 4);
-            if (rightCap2 && rightCap2.position.x < 6) {
-                requestAnimationFrame(openAnimation);
-            }
-        }
+    const data = {
+        name,
+        startWillpower: startWP,
+        skills,
+        obsessionLevel: document.getElementById('input-obsession-level').value,
+        obsessionText
     };
-    
-    setTimeout(openAnimation, 500);
+
+    const id = document.getElementById('edit-voice-id').value;
+    if (id) updateVoice(id, data);
+    else    addVoice(data);
+
+    closeModal('voice-modal');
 }
 
-// Animation loop
-function animate() {
-    requestAnimationFrame(animate);
-    
-    // Key floating animation when revealed
-    if (isUnlocked && key.scale.x >= 1.5) {
-        key.position.y = Math.sin(Date.now() * 0.002) * 0.3;
-        key.rotation.y += 0.01;
+function handleStartWPChange(e) {
+    document.getElementById('skill-3-row').classList.toggle('hidden', parseInt(e.target.value, 10) !== 7);
+}
+
+// ── Bid Modal ─────────────────────────────────────────────────────────────
+let bidState = null;
+
+function openBidModal() {
+    if (state.voices.length < 2) {
+        showToast('Need at least 2 Voices to bid!');
+        return;
     }
-    
-    renderer.render(scene, camera);
+    bidState = { step: 'collecting', voiceIndex: 0, bids: {} };
+    renderBidModal();
+    openModal('bid-modal');
 }
 
-// Handle window resize
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
+function renderBidModal() {
+    const content = document.getElementById('bid-content');
 
-// Start animation
-animate();
+    if (bidState.step === 'collecting') {
+        const voice = state.voices[bidState.voiceIndex];
+        const total = state.voices.length;
 
-// Log the correct code for testing
-// console.log('Correct code:', CORRECT_CODE);
+        content.innerHTML = `
+            <div class="bid-phase-prompt">
+                <h3>🤲 ${escapeHtml(voice.name)}'s Bid</h3>
+                <p>Everyone else look away!<br>
+                   <small>Current WP: <strong>${voice.willpower}</strong> &nbsp;·&nbsp; Player ${bidState.voiceIndex + 1} of ${total}</small></p>
+                <input type="number" id="bid-input" class="bid-secret-input"
+                    min="0" max="${voice.willpower}" placeholder="0"
+                    autocomplete="off" inputmode="numeric">
+                <p class="bid-peek-note">✋ What you type is hidden — others can't see it.</p>
+            </div>
+            <div class="bid-actions">
+                <button id="btn-bid-submit" class="btn btn-primary">Submit →</button>
+                <button id="btn-bid-pass"   class="btn btn-secondary">Pass (bid 0)</button>
+            </div>
+        `;
+
+        const input = document.getElementById('bid-input');
+        setTimeout(() => input.focus(), 80);
+
+        document.getElementById('btn-bid-submit').addEventListener('click', commitBid);
+        document.getElementById('btn-bid-pass').addEventListener('click', () => recordBid(0));
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') commitBid(); });
+
+    } else if (bidState.step === 'reveal') {
+        const sorted = [...state.voices]
+            .filter(v => bidState.bids[v.id] !== undefined)
+            .sort((a, b) => bidState.bids[b.id] - bidState.bids[a.id]);
+
+        if (sorted.length === 0) {
+            content.innerHTML = '<p style="text-align:center;padding:16px">No bids to show.</p>';
+            return;
+        }
+
+        const maxBid   = bidState.bids[sorted[0].id];
+        const winners  = sorted.filter(v => bidState.bids[v.id] === maxBid);
+        const isTie    = winners.length > 1;
+
+        const winnerMsg = isTie
+            ? `🎲 Tie! ${winners.map(v => escapeHtml(v.name)).join(' &amp; ')} must roll off!`
+            : `🧠 ${escapeHtml(winners[0].name)} takes control! (−${maxBid} WP)`;
+
+        const rowsHtml = sorted.map(v => `
+            <div class="bid-result-row${bidState.bids[v.id] === maxBid ? ' winner' : ''}">
+                <span class="voice-bid-name">${escapeHtml(v.name)}</span>
+                <span class="voice-bid-amount">${bidState.bids[v.id]} WP</span>
+            </div>
+        `).join('');
+
+        const applyBtn = !isTie
+            ? `<button id="btn-apply-win" class="btn btn-primary">✓ Apply Result</button>`
+            : '';
+
+        content.innerHTML = `
+            <div class="bid-winner-banner">${winnerMsg}</div>
+            <div class="bid-results">${rowsHtml}</div>
+            <p class="bid-footer-note">Winner loses their bid. Others keep theirs.</p>
+            <div class="bid-actions" style="flex-wrap:wrap;gap:8px;">
+                ${applyBtn}
+                <button id="btn-bid-redo"   class="btn btn-secondary">Redo Bid</button>
+                <button id="btn-bid-cancel" class="btn btn-secondary">Cancel</button>
+            </div>
+        `;
+
+        document.getElementById('btn-apply-win')?.addEventListener('click', () => {
+            const winner = winners[0];
+            winner.willpower = Math.max(0, winner.willpower - maxBid);
+            state.session.activeVoiceId = winner.id;
+            saveState();
+            render();
+            closeModal('bid-modal');
+            showToast(`🧠 ${winner.name} takes control of John!`);
+        });
+
+        document.getElementById('btn-bid-redo').addEventListener('click', () => {
+            bidState = { step: 'collecting', voiceIndex: 0, bids: {} };
+            renderBidModal();
+        });
+
+        document.getElementById('btn-bid-cancel').addEventListener('click', () => closeModal('bid-modal'));
+    }
+}
+
+function commitBid() {
+    const input  = document.getElementById('bid-input');
+    const voice  = state.voices[bidState.voiceIndex];
+    let amount   = parseInt(input.value, 10);
+    if (isNaN(amount) || amount < 0) amount = 0;
+    if (amount > voice.willpower)    amount = voice.willpower;
+    recordBid(amount);
+}
+
+function recordBid(amount) {
+    const voice = state.voices[bidState.voiceIndex];
+    bidState.bids[voice.id] = amount;
+    bidState.voiceIndex++;
+
+    if (bidState.voiceIndex >= state.voices.length) {
+        bidState.step = 'reveal';
+    }
+
+    renderBidModal();
+}
+
+// ── End Session Modal ─────────────────────────────────────────────────────
+function openEndSessionModal() {
+    const sorted = [...state.voices].sort((a, b) =>
+        (b.completions * b.obsessionLevel) - (a.completions * a.obsessionLevel)
+    );
+
+    const maxScore = sorted.length ? sorted[0].completions * sorted[0].obsessionLevel : 0;
+
+    const rowsHtml = sorted.map(v => {
+        const score     = v.completions * v.obsessionLevel;
+        const isWinner  = score === maxScore && score > 0;
+        return `
+            <div class="score-row${isWinner ? ' winner' : ''}">
+                <div class="score-voice-info">
+                    <span class="score-voice-name">${isWinner ? '🏆 ' : ''}${escapeHtml(v.name)}</span>
+                    <span class="score-voice-obsession">
+                        Lvl ${v.obsessionLevel}: ${escapeHtml(v.obsessionText)}
+                        (×${v.completions})
+                    </span>
+                </div>
+                <span class="score-points">${score}</span>
+            </div>
+        `;
+    }).join('');
+
+    document.getElementById('end-content').innerHTML =
+        rowsHtml || '<p style="text-align:center;padding:16px;color:var(--text-muted)">No Voices to show.</p>';
+
+    openModal('end-modal');
+}
+
+function startNewSession() {
+    if (!confirm('Start a new session? This resets all Willpower and completion counts.')) return;
+    state.voices.forEach(v => {
+        v.willpower        = v.startWillpower;
+        v.completions      = 0;
+        v.obsessionRevealed = false;
+    });
+    state.session.activeVoiceId = null;
+    state.session.johnState     = 'awake';
+    saveState();
+    render();
+    closeModal('end-modal');
+    showToast('🧠 New session started! Good luck, Voices.');
+}
+
+// ── d6 Roll ───────────────────────────────────────────────────────────────
+function rollD6() {
+    const result = Math.ceil(Math.random() * 6);
+    const emoji  = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][result];
+    showToast(`🎲 Rolled a ${result} ${emoji}`, 2500);
+}
+
+// ── Event Binding ─────────────────────────────────────────────────────────
+function bindEvents() {
+    // Header
+    document.getElementById('btn-roll-d6').addEventListener('click', rollD6);
+    document.getElementById('btn-rules').addEventListener('click', () => openModal('rules-modal'));
+
+    // John state toggles
+    document.getElementById('btn-john-awake').addEventListener('click',  () => setJohnState('awake'));
+    document.getElementById('btn-john-asleep').addEventListener('click', () => setJohnState('asleep'));
+
+    // Main control buttons
+    document.getElementById('btn-add-voice').addEventListener('click',   openAddVoiceModal);
+    document.getElementById('btn-bid').addEventListener('click',          openBidModal);
+    document.getElementById('btn-john-sleeps').addEventListener('click', johnSleeps);
+    document.getElementById('btn-end-session').addEventListener('click', openEndSessionModal);
+
+    // Empty state "add first" button
+    document.getElementById('btn-add-first').addEventListener('click', openAddVoiceModal);
+
+    // Voice modal
+    document.getElementById('btn-close-voice-modal').addEventListener('click', () => closeModal('voice-modal'));
+    document.getElementById('btn-cancel-voice').addEventListener('click',       () => closeModal('voice-modal'));
+    document.getElementById('input-start-wp').addEventListener('change', handleStartWPChange);
+    document.getElementById('voice-form').addEventListener('submit', handleVoiceFormSubmit);
+
+    // Bid modal close
+    document.getElementById('btn-close-bid-modal').addEventListener('click', () => closeModal('bid-modal'));
+
+    // End session modal
+    document.getElementById('btn-close-end-modal').addEventListener('click', () => closeModal('end-modal'));
+    document.getElementById('btn-new-session').addEventListener('click',     startNewSession);
+    document.getElementById('btn-close-end').addEventListener('click',       () => closeModal('end-modal'));
+
+    // Rules modal
+    document.getElementById('btn-close-rules').addEventListener('click',  () => closeModal('rules-modal'));
+    document.getElementById('btn-close-rules-2').addEventListener('click', () => closeModal('rules-modal'));
+
+    // ── Delegated card events ──
+    document.getElementById('voices-container').addEventListener('click', e => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const { action, id } = btn.dataset;
+        switch (action) {
+            case 'wp-up':            adjustWillpower(id, +1);    break;
+            case 'wp-down':          adjustWillpower(id, -1);    break;
+            case 'comp-up':          adjustCompletions(id, +1);  break;
+            case 'comp-down':        adjustCompletions(id, -1);  break;
+            case 'toggle-obsession': toggleObsessionReveal(id);  break;
+            case 'make-active':      setActiveVoice(id);         break;
+            case 'relinquish':       clearActiveVoice();         break;
+            case 'edit':             openEditVoiceModal(id);     break;
+            case 'delete':           deleteVoice(id);            break;
+        }
+    });
+
+    // Close modals on backdrop click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+        overlay.addEventListener('click', e => {
+            if (e.target === overlay) overlay.classList.add('hidden');
+        });
+    });
+
+    // Close modals on Escape
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal-overlay:not(.hidden)').forEach(m => m.classList.add('hidden'));
+        }
+    });
+}
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────
+loadState();
+bindEvents();
+render();
+
